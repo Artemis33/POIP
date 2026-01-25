@@ -1,6 +1,6 @@
 # Dossiers à ignorer
 myenv/
-data/
+warehouses/
 toyData/
 .vscode/
 __pycache__/

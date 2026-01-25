@@ -5,7 +5,7 @@ from warehouse_loader import WarehouseLoader
 from checker import checker
 
 # Repertoire racine du projet (parent de tools/)
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/POIP"
 
 
 def main(warehouse_dir):
