@@ -1,5 +1,5 @@
 """Classe Solution"""
-from warehouse_loader import *
+from python.WarehouseLoader import *
 
 class WarehouseSolution:
 	"""
@@ -16,22 +16,24 @@ class WarehouseSolution:
 
 	Methods
 	-------
-	__init__(self, name)
-		Initializes the ParallelSchedulingSolution with the provided name.
-	save_solution(self, file_name)
-		Saves the solution in the provided file with the name file_name
+	__init__(self, name_instance: str, name_algorithm: str)
+		Initializes the ParallelSchedulingSolution with the provided name and algorithm.
+	save_solution(self)
+		Saves the solution
 	read_solution(self, file_name)
 		Reads a solution in the provided file with the name file_name
 	__str__(self)
 		Displays the solution
 	"""
 	
-	def __init__(self, name):
-		self._name = name
+	def __init__(self, name_instance: str, name_algorithm: str):
+		self._name = name_instance
+		self._algorithm = name_algorithm
 		self._value = 0
 		self._positions = []
 
-	def save_solution(self, file_name):
+	def save_solution(self):
+		file_name = f"{self._name}_{self._algorithm}.sol"
 		if self is None:
 			print("No solution provided")
 			return None

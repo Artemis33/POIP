@@ -1,7 +1,7 @@
 """Point d'entree : charge une instance et valide la solution."""
 
 import os
-from warehouse_loader import WarehouseLoader
+from python.WarehouseLoader import WarehouseLoader
 from checker import checker
 
 # Repertoire racine du projet (parent de tools/)
