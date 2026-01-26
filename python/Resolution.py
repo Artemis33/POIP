@@ -21,7 +21,13 @@ class Resolution:
     resolve(self)
         Methode a implementer dans les sous-classes pour resoudre le probleme.  
     """
+
     def __init__(self, instance_name: str):
+        """
+        Initializes the Resolution class with the given instance name.
+        
+        @param instance_name: str - The name of the warehouse instance to load.
+        """
         self.warehouse_loader = WarehouseLoader(instance_name)
         self.solution = WarehouseSolution(instance_name, self.__class__.__name__)
 
@@ -29,4 +35,8 @@ class Resolution:
         self.solution.save_solution()
 
     def resolve(self):
+        """
+        Resolves the warehouse problem.
+        This method should be implemented in subclasses.
+        """
         raise NotImplementedError("Method resolve() must be implemented in subclass.")
