@@ -28,7 +28,10 @@ L’arborescence du projet est organisée comme suit :
 ```
 
 ### `build/`
-
+```
+> cmake -S . -B build
+> cmake --build build
+```
 **Fichiers générés automatiquement** (binaires, résultats intermédiaires, logs, etc.).
 Ce dossier peut être supprimé et régénéré sans perte d’information.
 * Cmake
