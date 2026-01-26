@@ -5,3 +5,4 @@ toyData/
 .vscode/
 __pycache__/
 data/
+build/
