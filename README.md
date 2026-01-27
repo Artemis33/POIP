@@ -1,5 +1,24 @@
 # README
 
+## Idées et autres...
+
+### màj + TODO (+ remarque)
+- Algo naïf OK, implémenter le PL dans un nouveau fichier modele_1.py (corriger le PL du latex d'abord)
+- Dessin d'une solution: Presque ok, manque le trajet entre le rack du début et le premier rack visité + entre le dernier rack visité et le rack de fin. Peut-être amélioré: Proportion (Spoiler: c'est casse-tête, même avec notre ami le chat).
+- Attention: pour l'affichage d'une solution, on n'affiche le trajet que d'une seule commande (sinon ça fait un bazar illisible). Le fichier est généré dans le dossier graphs.
+- Modifier le nommage des fichiers solutions et graphiques pour ajouter un nombre aléatoire entre 000 et 999 (évite l'écrasement des données si l'algorithme varie à cause de paramètres ou si c'est un algo stochastique)
+
+### Conventions de nommage
+
+* **Fonctions et méthodes** : `snake_case`
+
+  * Exemple : `read_solution()`, `check_rack_capacity()`
+
+* **Fichiers** = pareil que leur classe : `CamelCase`
+
+  * Exemple : `DataLoader.cpp`, `DataLoader.py`
+
+
 ## Introduction
 
 Dans les entrepôts logistiques, la préparation des commandes représente une part importante du temps et des coûts opérationnels. Les commandes reçues sont traitées via un Warehouse Management System (WMS), puis confiées à des préparateurs chargés de collecter les produits correspondants.
@@ -71,14 +90,3 @@ TODO
 
 ---
 
-## Idées et autres...
-
-### Conventions de nommage
-
-* **Fonctions et méthodes** : `snake_case`
-
-  * Exemple : `read_solution()`, `check_rack_capacity()`
-
-* **Fichiers** = pareil que leur classe : `CamelCase`
-
-  * Exemple : `DataLoader.cpp`, `DataLoader.py`

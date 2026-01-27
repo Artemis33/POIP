@@ -28,11 +28,10 @@ class Resolution:
         @param instance_name: str - The name of the warehouse instance to load.
         """
         warehouse_loader = WarehouseLoader(instance_name)
+
+        self.name = instance_name.split("/")[-2]
         self.instance = warehouse_loader.load_all()
-
-        self.solution = WarehouseSolution(instance_name.split("/")[-2], self.__class__.__name__)
-
-        print(self.instance)
+        self.solution = WarehouseSolution(self.name, self.__class__.__name__)
 
         self.solve()
         self.solution.save_solution()
@@ -44,34 +43,45 @@ class Resolution:
         """
         raise NotImplementedError("Method solve() must be implemented in subclass.")
 
-    def write_svg(self, path: str, width: float = 1600.0, height: float = 800.0) -> bool:
+    def write_svg(self, order_to_draw: int = 0, width: float = 1600.0, height: float = 800.0) -> bool:
         """
-        Write an SVG that represents the warehouse and order paths.
+        Write an SVG representing the warehouse and order paths.
 
-        - Racks are rectangles, laid out per aisle (two columns per aisle).
-        - Even-numbered aisles go up; odd-numbered aisles go down (S-PATH).
-        - Rack ID is centered inside the rectangle.
-        - Racks 0 (bottom center) and n-1 (top center) are outside aisles.
-        - Each aisle has entry/exit points (depending on direction).
-        - Each order is a path composed of segments within aisles:
-            entry -> racks of the order (only those storing its products) -> exit.
-            Between consecutive aisles: a segment exit -> next entry.
-            For aisles with no racks to visit, draw a direct entry -> exit line.
+        - Rack rectangles are placed using coordinates from ../help/rack_coordinates.txt.
+        If coordinates are normalized in [0,1], they are scaled to the canvas size.
+        If coordinates are absolute (possibly negative), they are affine-transformed
+        to fit inside the canvas with margins.
+        - Aisles are used for entry/exit points and traversal order (S-PATH):
+        even aisles go up (entry at top, exit at bottom), odd aisles go down.
+        - Rack ID is centered inside its rectangle.
+        - Racks 0 (bottom center) and n-1 (top center) are included as normal racks
+        with their coordinates from the file.
+        - For each order, draw path segments within aisles:
+        entry -> visited racks in this aisle (only racks storing its products) -> exit.
+        Between consecutive aisles: an exit -> next entry segment.
+        If an aisle contains no racks to visit, draw a direct entry -> exit dashed line.
 
-        :param path: Output SVG file path.
-        :param width: SVG canvas width.
-        :param height: SVG canvas height.
-        :return: True if writing succeeds, False otherwise.
+        :param order_to_draw: Index of the order to visualize (default: 0).
+        :type order_to_draw: int
+        :param width: Width of the SVG canvas (default: 1600.0).
+        :type width: float
+        :param height: Height of the SVG canvas (default: 800.0).
+        :type height: float
+        :return: True if SVG was successfully written, False otherwise.
+        :rtype: bool
         """
         try:
+            import os
+
             inst = self.instance
             sol = self.solution
 
+            # Instance basics
             num_racks = int(inst.metadata.get("num_racks", len(inst.rack_capacity)))
             aisles = inst.aisles_racks
             num_aisles = len(aisles)
 
-            # Color palette for circuits and orders
+            # Color palette
             palette = [
                 "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
                 "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
@@ -79,225 +89,193 @@ class Resolution:
             def color_for_index(i: int) -> str:
                 if i < len(palette):
                     return palette[i]
-                base = i % len(palette)
-                return palette[base]
+                return palette[i % len(palette)]
+            
 
-            # Map rack -> placed products (and circuits)
+            # Map racks -> products and circuits (limit: 2 products for coloring)
             rack_products = {}
             for p_idx, rack_id in enumerate(sol._positions):
                 try:
                     rid = int(rack_id)
                 except Exception:
                     continue
-                if rid < 0 or rid >= num_racks:
-                    continue
-                rack_products.setdefault(rid, []).append(p_idx)
+                if 0 <= rid < num_racks:
+                    rack_products.setdefault(rid, []).append(p_idx)
 
             rack_circuits = {}
             for rid, plist in rack_products.items():
                 circuits = []
                 for p in plist[:2]:
-                    c = inst.product_circuit[p]
-                    circuits.append(c)
+                    circuits.append(inst.product_circuit[p])
                 rack_circuits[rid] = circuits
 
-            # Geometry
+            # Geometry and margins
             margin = 40.0
             rack_w = 46.0
             rack_h = 24.0
-            col_gap = 70.0
-            aisle_gap = 90.0
-
             top_y = margin + rack_h / 2.0
             bottom_y = height - margin - rack_h / 2.0
-
-            def aisle_x_positions(j: int):
-                left_x = margin + j * (2 * rack_w + col_gap + aisle_gap)
-                right_x = left_x + rack_w + col_gap
-                center_x = left_x + rack_w + col_gap / 2.0
-                return left_x, right_x, center_x
-
-            # Precompute: max rows per column for vertical spacing
-            def split_columns(rack_list):
-                # Exclude central racks 0 and n-1 from aisles
-                filtered = [r for r in rack_list if r not in (0, num_racks - 1)]
-                odds = sorted([r for r in filtered if r % 2 == 1])
-                evens = sorted([r for r in filtered if r % 2 == 0])
-                if len(filtered) > 0 and (len(odds) == 0 or len(evens) == 0):
-                    # Fallback: split into two balanced columns if one is empty
-                    srt = sorted(filtered)
-                    mid = len(srt) // 2
-                    odds = srt[:mid]
-                    evens = srt[mid:]
-                return odds, evens
-
-            max_rows = 1
-            columns_per_aisle = []
-            for j in range(num_aisles):
-                oc, ec = split_columns(aisles[j])
-                columns_per_aisle.append((oc, ec))
-                max_rows = max(max_rows, len(oc), len(ec))
-
-            def y_positions(count: int, direction_up: bool):
-                if count <= 0:
-                    return []
-                span = (bottom_y - top_y)
-                step = span / max(count - 1, 1)
-                ys = [top_y + i * step for i in range(count)]
-                if direction_up:
-                    # IDs increase with height -> sorted elements go bottom to top
-                    ys = list(reversed(ys))
-                return ys
-
-            # Prepare rack centers for drawing and routing
+            # Load rack coordinates from ../help/rack_coordinates.txt
+            # Format:
+            #   line 1: integer n (number of racks)
+            #   next n lines: "x y" floats (normalized [0,1] or absolute, possibly negative)
+            coords_path = os.path.join("../data/", self.name, "help", "rack_coordinates.txt")
             rack_centers = {}
+            with open(coords_path, "r", encoding="utf-8") as f:
+                lines = [ln.strip() for ln in f.readlines() if ln.strip()]
+                n_coords = int(lines[0])
+                num_use = min(n_coords, num_racks)
+
+                # Parse raw coordinates
+                raw_coords = []
+                for i in range(num_use):
+                    parts = lines[i + 1].replace(",", " ").split()
+                    if len(parts) < 2:
+                        raise ValueError(f"Invalid coordinates line {i+2}: {lines[i+1]}")
+                    x_val = float(parts[0])
+                    y_val = float(parts[1])
+                    raw_coords.append((x_val, y_val))
+
+                # Detect normalization (assume [0,1] if all in range)
+                max_x = max(c[0] for c in raw_coords)
+                max_y = max(c[1] for c in raw_coords)
+                min_x = min(c[0] for c in raw_coords)
+                min_y = min(c[1] for c in raw_coords)
+                normalized = (max_x <= 1.0 and max_y <= 1.0 and min_x >= 0.0 and min_y >= 0.0)
+                if normalized:
+                    # Direct scaling to canvas size
+                    for rid in range(num_use):
+                        rx, ry = raw_coords[rid]
+                        cx = rx * width
+                        cy = ry * height
+                        rack_centers[rid] = (cx, cy)
+                else:
+                    # Affine transform to fit inside canvas with margins (handles negatives)
+                    span_x = max_x - min_x
+                    span_y = max_y - min_y
+                    scale_x = (width - 2.0 * margin) / span_x if span_x > 0 else 1.0
+                    scale_y = (height - 2.0 * margin) / span_y if span_y > 0 else 1.0
+                    for rid in range(num_use):
+                        rx, ry = raw_coords[rid]
+                        cx = margin + (rx - min_x) * scale_x
+                        cy = margin + (ry - min_y) * scale_y
+                        rack_centers[rid] = (cx, cy)
+
+                # If coords file has more than metadata racks, ignore extras
+                # If coords file has fewer, missing racks won't be drawn
+
+            # Compute aisle centers (x only) from rack coordinates
+            aisle_center_x = []
             for j in range(num_aisles):
-                direction_up = (j % 2 == 0)
-                odds, evens = columns_per_aisle[j]
-                y_odds = y_positions(len(odds), direction_up)
-                y_evens = y_positions(len(evens), direction_up)
-                left_x, right_x, center_x = aisle_x_positions(j)
-                for idx, rid in enumerate(odds):
-                    rack_centers[rid] = (left_x + rack_w / 2.0, y_odds[idx])
-                for idx, rid in enumerate(evens):
-                    rack_centers[rid] = (right_x + rack_w / 2.0, y_evens[idx])
+                racks_j = [r for r in aisles[j] if r in rack_centers]
+                if len(racks_j) == 0:
+                    # As a last resort, center in canvas
+                    aisle_center_x.append(width / 2.0)
+                else:
+                    mean_x = sum(rack_centers[r][0] for r in racks_j) / float(len(racks_j))
+                    aisle_center_x.append(mean_x)
 
-            # Central racks 0 (bottom) and n-1 (top)
-            center_x_global = width / 2.0
-            rack_centers[0] = (center_x_global, bottom_y)
-            rack_centers[num_racks - 1] = (center_x_global, top_y)
-
-            # SVG writing
+            # Determine vertical bounds for aisles
+            top_y = margin + (min([c[1] for c in raw_coords[1:-1]]) - min_y) * scale_y - rack_h 
+            bottom_y = margin + (max([c[1] for c in raw_coords[1:-1]]) - min_y) * scale_y + rack_h 
+            # Output file
+            path = f"../graphs/{self.name}_{self.solution._algorithm}.svg"
             with open(path, "w", encoding="utf-8") as svg:
+                # SVG header
                 svg.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-                svg.write(f"<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" width=\"{width}\" height=\"{height}\">\n")
+                svg.write(f"<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"{1.1}\" width=\"{width}\" height=\"{height}\">\n")
                 svg.write("<rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n")
 
-                # Draw aisles: entry/exit points
+                # Draw aisle entry/exit points
                 for j in range(num_aisles):
-                    left_x, right_x, center_x = aisle_x_positions(j)
-                    direction_up = (j % 2 == 0)
+                    cx = aisle_center_x[j]
+                    direction_up = (j % 2 == 0)  # even -> up, odd -> down
                     entry_y = top_y if direction_up else bottom_y
                     exit_y = bottom_y if direction_up else top_y
-                    svg.write(f"<circle cx=\"{center_x}\" cy=\"{entry_y}\" r=\"6\" fill=\"#333\"/>\n")
-                    svg.write(f"<circle cx=\"{center_x}\" cy=\"{exit_y}\" r=\"6\" fill=\"#333\"/>\n")
+                    svg.write(f"<circle cx=\"{cx}\" cy=\"{entry_y}\" r=\"6\" fill=\"#333\"/>\n")
+                    svg.write(f"<circle cx=\"{cx}\" cy=\"{exit_y}\" r=\"6\" fill=\"#333\"/>\n")
 
-                # Draw racks (rectangles + label)
-                for j in range(num_aisles):
-                    left_x, right_x, center_x = aisle_x_positions(j)
-                    odds, evens = columns_per_aisle[j]
-                    direction_up = (j % 2 == 0)
-                    y_odds = y_positions(len(odds), direction_up)
-                    y_evens = y_positions(len(evens), direction_up)
-
-                    for idx, rid in enumerate(odds):
-                        cx, cy = left_x + rack_w / 2.0, y_odds[idx]
-                        x = cx - rack_w / 2.0
-                        y = cy - rack_h / 2.0
-                        circuits = rack_circuits.get(rid, [])
-                        if len(circuits) == 0:
-                            svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"white\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                        elif len(circuits) == 1:
-                            fill = color_for_index(int(circuits[0]))
-                            svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"{fill}\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                        else:
-                            c1 = color_for_index(int(circuits[0]))
-                            c2 = color_for_index(int(circuits[1]))
-                            svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c1}\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                            svg.write(f"<rect x=\"{x + rack_w/2.0}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c2}\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                        svg.write(f"<text x=\"{cx}\" y=\"{cy + 4}\" font-size=\"12\" text-anchor=\"middle\" fill=\"black\">{rid}</text>\n")
-
-                    for idx, rid in enumerate(evens):
-                        cx, cy = right_x + rack_w / 2.0, y_evens[idx]
-                        x = cx - rack_w / 2.0
-                        y = cy - rack_h / 2.0
-                        circuits = rack_circuits.get(rid, [])
-                        if len(circuits) == 0:
-                            svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"white\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                        elif len(circuits) == 1:
-                            fill = color_for_index(int(circuits[0]))
-                            svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"{fill}\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                        else:
-                            c1 = color_for_index(int(circuits[0]))
-                            c2 = color_for_index(int(circuits[1]))
-                            svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c1}\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                            svg.write(f"<rect x=\"{x + rack_w/2.0}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c2}\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                        svg.write(f"<text x=\"{cx}\" y=\"{cy + 4}\" font-size=\"12\" text-anchor=\"middle\" fill=\"black\">{rid}</text>\n")
-
-                # Central racks 0 and n-1
-                for rid in (0, num_racks - 1):
-                    cx, cy = rack_centers[rid]
+                # Draw racks (use coordinates from file or transformed)
+                for rid, (cx, cy) in rack_centers.items():
                     x = cx - rack_w / 2.0
                     y = cy - rack_h / 2.0
                     circuits = rack_circuits.get(rid, [])
                     if len(circuits) == 0:
-                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"white\" stroke=\"black\" stroke-width=\"1.5\"/>\n")
+                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"white\" stroke=\"black\" stroke-width=\"1\"/>\n")
                     elif len(circuits) == 1:
                         fill = color_for_index(int(circuits[0]))
-                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"{fill}\" stroke=\"black\" stroke-width=\"1.5\"/>\n")
+                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"{fill}\" stroke=\"black\" stroke-width=\"1\"/>\n")
                     else:
                         c1 = color_for_index(int(circuits[0]))
                         c2 = color_for_index(int(circuits[1]))
-                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c1}\" stroke=\"black\" stroke-width=\"1.5\"/>\n")
-                        svg.write(f"<rect x=\"{x + rack_w/2.0}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c2}\" stroke=\"black\" stroke-width=\"1.5\"/>\n")
+                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c1}\" stroke=\"black\" stroke-width=\"1\"/>\n")
+                        svg.write(f"<rect x=\"{x + rack_w/2.0}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c2}\" stroke=\"black\" stroke-width=\"1\"/>\n")
                     svg.write(f"<text x=\"{cx}\" y=\"{cy + 4}\" font-size=\"12\" text-anchor=\"middle\" fill=\"black\">{rid}</text>\n")
 
-                # Paths per order
-                for k, order in enumerate(inst.orders):
-                    stroke = color_for_index(k)
-                    stroke_w = 2.0
-                    # Iterate aisles to build overall serpentine path
-                    prev_exit = None
-                    for j in range(num_aisles):
-                        left_x, right_x, center_x = aisle_x_positions(j)
-                        direction_up = (j % 2 == 0)
-                        entry_y = top_y if direction_up else bottom_y
-                        exit_y = bottom_y if direction_up else top_y
-                        entry_pt = (center_x, entry_y)
-                        exit_pt = (center_x, exit_y)
+                # Draw path for a specific order (serpentine across aisles)
+                # for k, order in enumerate(inst.orders):
+                k = order_to_draw
+                order = inst.orders[k]  # Only first order for clarity
+                stroke = color_for_index(k)
+                stroke_w = 2.0
+                prev_exit = None
+                for j in range(num_aisles):
+                    cx = aisle_center_x[j]
+                    direction_up = (j % 2 == 0)
+                    entry_y = top_y if direction_up else bottom_y
+                    exit_y = bottom_y if direction_up else top_y
+                    entry_pt = (cx, entry_y)
+                    exit_pt = (cx, exit_y)
 
-                        if prev_exit is not None:
-                            svg.write(
-                                f"<line x1=\"{prev_exit[0]}\" y1=\"{prev_exit[1]}\" x2=\"{entry_pt[0]}\" y2=\"{entry_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"0.6\"/>\n"
-                            )
+                    # Link previous aisle exit to current entry
+                    if prev_exit is not None:
+                        svg.write(
+                            f"<line x1=\"{prev_exit[0]}\" y1=\"{prev_exit[1]}\" x2=\"{entry_pt[0]}\" y2=\"{entry_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"0.6\"/>\n"
+                        )
 
-                        # Order racks within this aisle
-                        aisle_racks_set = set([r for r in aisles[j] if r not in (0, num_racks - 1)])
-                        visit_points = []
-                        for prod in order:
-                            try:
-                                rid = int(sol._positions[prod])
-                            except Exception:
-                                continue
-                            if rid in aisle_racks_set:
-                                visit_points.append(rack_centers.get(rid))
+                    # Collect visit points (racks in this aisle holding products of the order)
+                    aisle_racks_set = set([r for r in aisles[j] if r in rack_centers and r not in (0, num_racks - 1)])
+                    visit_points = []
+                    for prod in order:
+                        try:
+                            rid = int(sol._positions[prod])
+                        except Exception:
+                            continue
+                        if rid in aisle_racks_set:
+                            pt = rack_centers.get(rid)
+                            if pt is not None:
+                                visit_points.append(pt)
 
-                        # Sort by traversal direction within the aisle
-                        if len(visit_points) > 0:
-                            if direction_up:
-                                visit_points.sort(key=lambda p: p[1], reverse=False)  # top to bottom: increasing y
-                            else:
-                                visit_points.sort(key=lambda p: p[1], reverse=True)   # bottom to top: decreasing y
-
-                            # entry -> racks -> exit
-                            last = entry_pt
-                            for pt in visit_points:
-                                svg.write(
-                                    f"<line x1=\"{last[0]}\" y1=\"{last[1]}\" x2=\"{pt[0]}\" y2=\"{pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"0.8\"/>\n"
-                                )
-                                last = pt
-                            svg.write(
-                                f"<line x1=\"{last[0]}\" y1=\"{last[1]}\" x2=\"{exit_pt[0]}\" y2=\"{exit_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"0.8\"/>\n"
-                            )
+                    # Sort by vertical traversal according to S-PATH
+                    if len(visit_points) > 0:
+                        if direction_up:
+                            # Traverse from top to bottom (increasing y)
+                            visit_points.sort(key=lambda p: p[1])
                         else:
-                            # Aisle traversed without visiting racks
+                            # Traverse from bottom to top (decreasing y)
+                            visit_points.sort(key=lambda p: p[1], reverse=True)
+
+                        # entry -> racks -> exit
+                        last = entry_pt
+                        for pt in visit_points:
                             svg.write(
-                                f"<line x1=\"{entry_pt[0]}\" y1=\"{entry_pt[1]}\" x2=\"{exit_pt[0]}\" y2=\"{exit_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"0.35\" stroke-dasharray=\"4 3\"/>\n"
+                                f"<line x1=\"{last[0]}\" y1=\"{last[1]}\" x2=\"{pt[0]}\" y2=\"{pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"0.8\"/>\n"
                             )
+                            last = pt
+                        svg.write(
+                            f"<line x1=\"{last[0]}\" y1=\"{last[1]}\" x2=\"{exit_pt[0]}\" y2=\"{exit_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"{0.8}\"/>\n"
+                        )
+                    else:
+                        # Aisle traversed without visiting racks
+                        svg.write(
+                            f"<line x1=\"{entry_pt[0]}\" y1=\"{entry_pt[1]}\" x2=\"{exit_pt[0]}\" y2=\"{exit_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"{0.35}\" stroke-dasharray=\"4 3\"/>\n"
+                        )
 
-                        prev_exit = exit_pt
+                    prev_exit = exit_pt
 
+                # SVG end
                 svg.write("</svg>\n")
+
             return True
         except Exception:
             return False

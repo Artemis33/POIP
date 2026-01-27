@@ -34,7 +34,7 @@ class WarehouseInstance:
                  product_circuit: List[int], aisles_racks: List[List[int]],
                  orders: List[List[int]], metadata: Dict[str, float]):
         """
-        Docstring pour __init__
+        Initializes the `WarehouseInstance`.
         
         :param adjacency: Square adjacency matrix (n x n) between racks.
         :type adjacency: List[List[int]]
