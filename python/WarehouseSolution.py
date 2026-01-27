@@ -1,5 +1,5 @@
 """Classe Solution"""
-from python.WarehouseLoader import *
+from WarehouseLoader import *
 
 class WarehouseSolution:
 	"""
@@ -33,7 +33,7 @@ class WarehouseSolution:
 		self._positions = []
 
 	def save_solution(self):
-		file_name = f"{self._name}_{self._algorithm}.sol"
+		file_name = f"../solutions/{self._name}_{self._algorithm}.sol"
 		if self is None:
 			print("No solution provided")
 			return None

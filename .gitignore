@@ -6,3 +6,4 @@ toyData/
 __pycache__/
 data/
 build/
+.DS_Store
