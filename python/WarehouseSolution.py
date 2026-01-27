@@ -1,5 +1,6 @@
 """Classe Solution"""
 from WarehouseLoader import *
+import random
 
 class WarehouseSolution:
 	"""
@@ -27,13 +28,16 @@ class WarehouseSolution:
 	"""
 	
 	def __init__(self, name_instance: str, name_algorithm: str):
-		self._name = name_instance
+		self._instance = name_instance
 		self._algorithm = name_algorithm
-		self._value = 0
+		self._id = f"{random.randint(0, 999):03d}"
+		
+		self._value = -1
+		self._nb_product = -1
 		self._positions = []
 
 	def save_solution(self):
-		file_name = f"../solutions/{self._name}_{self._algorithm}.sol"
+		file_name = f"../solutions/{self._instance}_{self._algorithm}_{self._id}.sol"
 		if self is None:
 			print("No solution provided")
 			return None
@@ -44,23 +48,28 @@ class WarehouseSolution:
 				for product in self._positions:
 					file.write(str(product) + '\n')
 	
-	def read_solution(self, file_name):
+	def read_solution(self, instance: str, algo: str, id: str):
+		file_name = f"../solutions/{instance}_{algo}_{id}.sol"
+		self._positions = []
 		try:
 			with open(file_name, 'r') as file:
 				line = file.readline()
-				self._value = int(line)
-				while(line!=""):
-					line = file.readline()
-					if line:
-						product = line.strip()
-						self._positions.append(product)
+				self._nb_product = int(line)
+				for _ in range(self._nb_product):
+					rack = file.readline()
+					if rack:
+						rack = int(rack.strip())
+						self._positions.append(rack)
+			self._id = id
+			self._instance = instance
+			self._algorithm = algo
 
 		except Exception as e:
 			print(f"An error occurred while reading the file: {e}")
 
 	def __str__(self):
 		csv = ''
-		csv += f"Instance's name: {self._name}\t" + f"Number of products: {self._value}\n" 
+		csv += f"Instance's name: {self._instance}\t" + f"Number of products: {self._nb_product}\n" 
 		for i in range(len(self._positions)):
 			csv += f"product #{i+1}\t" + f"in rack #{int(self._positions[i])+1} \n"
 		return (csv)

@@ -43,6 +43,9 @@ class Resolution:
         """
         raise NotImplementedError("Method solve() must be implemented in subclass.")
 
+    def load_solution(self, instance: str, algo: str, id: str):
+        self.solution.read_solution(instance, algo, id)
+
     def write_svg(self, order_to_draw: int = 0, width: float = 1600.0, height: float = 800.0) -> bool:
         """
         Write an SVG representing the warehouse and order paths.
@@ -179,7 +182,7 @@ class Resolution:
             top_y = margin + (min([c[1] for c in raw_coords[1:-1]]) - min_y) * scale_y - rack_h 
             bottom_y = margin + (max([c[1] for c in raw_coords[1:-1]]) - min_y) * scale_y + rack_h 
             # Output file
-            path = f"../graphs/{self.name}_{self.solution._algorithm}.svg"
+            path = f"../graphs/{self.name}_{self.solution._algorithm}_{order_to_draw}_{self.solution._id}.svg"
             with open(path, "w", encoding="utf-8") as svg:
                 # SVG header
                 svg.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
@@ -213,7 +216,6 @@ class Resolution:
                     svg.write(f"<text x=\"{cx}\" y=\"{cy + 4}\" font-size=\"12\" text-anchor=\"middle\" fill=\"black\">{rid}</text>\n")
 
                 # Draw path for a specific order (serpentine across aisles)
-                # for k, order in enumerate(inst.orders):
                 k = order_to_draw
                 order = inst.orders[k]  # Only first order for clarity
                 stroke = color_for_index(k)
