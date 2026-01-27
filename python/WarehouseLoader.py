@@ -1,8 +1,8 @@
 """Warehouse instance data loader.
 
-This module provides a `WarehouseLoader` class that reads all the
-files describing a warehouse slotting problem instance and returns
-them as a structured `WarehouseInstance` dataclass.
+    Constructor for WarehouseInstance.
+        
+    :param adjacency: Square adjacency matrix (n x n) between racks.
 """
 
 import os
@@ -32,22 +32,25 @@ class WarehouseInstance:
     """
     def __init__(self, adjacency: List[List[int]], rack_capacity: List[int],
                  product_circuit: List[int], aisles_racks: List[List[int]],
-                 orders: List[List[int]], metadata: Dict[str, float]):
+                 orders: List[List[int]], metadata: Dict[str, float]) -> None:
         """
         Initializes the `WarehouseInstance`.
+
+        Parameters
+        ----------
         
-        :param adjacency: Square adjacency matrix (n x n) between racks.
-        :type adjacency: List[List[int]]
-        :param rack_capacity: Capacity (number of slots) available for each rack.
-        :type rack_capacity: List[int]
-        :param product_circuit: Circuit identifier for each product.
-        :type product_circuit: List[int]
-        :param aisles_racks: For each aisle, the list of rack IDs present in the aisle.
-        :type aisles_racks: List[List[int]]
-        :param orders: List of orders; each order is a list of product IDs.
-        :type orders: List[List[int]]
-        :param metadata: Miscellaneous instance metadata (counts and parameters).
-        :type metadata: Dict[str, float]
+        adjacency : List[List[int]]
+            Square adjacency matrix (n x n) between racks.
+        rack_capacity : List[int]
+            Capacity (number of slots) available for each rack.
+        product_circuit : List[int]
+            Circuit identifier for each product.
+        aisles_racks : List[List[int]]
+            For each aisle, the list of rack IDs present in the aisle.
+        orders : List[List[int]]
+            List of orders; each order is a list of product IDs.
+        metadata : Dict[str, float]
+            Miscellaneous instance metadata (counts and parameters).
         """
         self.adjacency = adjacency
         self.rack_capacity = rack_capacity
@@ -56,7 +59,10 @@ class WarehouseInstance:
         self.orders = orders
         self.metadata = metadata
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        String representation of the warehouse instance.
+        """
         return (f"WarehouseInstance(num_racks={len(self.rack_capacity)}, "
                 f"capacity={sum(self.rack_capacity)}, "
                 f"num_products={len(self.product_circuit)}, "
@@ -74,7 +80,7 @@ class WarehouseLoader:
 
     Methods
     -------
-    __init__(warehouse_dir: str)
+    __init__(warehouse_dir: str) -> None
         Initializes the loader with the given directory.
     _path(filename: str) -> str
         Builds the absolute path to a file within the directory.
@@ -96,9 +102,10 @@ class WarehouseLoader:
         Loads all components and returns a `WarehouseInstance`.
     """
 
-    def __init__(self, warehouse_dir: str):
+    def __init__(self, warehouse_dir: str) -> None:
         """
-        Initializes the `WarehouseLoader` with the path to the instance directory.
+        Initializes the `WarehouseLoader` with the path to \
+            the instance directory.
 
         Parameters
         ----------
@@ -142,7 +149,8 @@ class WarehouseLoader:
             Cleaned list of lines.
         """
         with open(self._path(filename)) as f:
-            return [l.strip() for l in f if l.strip() and not l.startswith("...")]
+            return [l.strip() for l in f \
+                    if l.strip() and not l.startswith("...")]
 
     def load_adjacency_matrix(self) -> List[List[int]]:
         """
@@ -210,7 +218,8 @@ class WarehouseLoader:
             For each aisle, the list of rack IDs.
         """
         lines = self._read_lines("aisle_racks.txt")
-        # New format: the first integer on each line is the count, which we skip.
+        # New format: the first integer on each line is the count, 
+        # which we skip.
         return [list(map(int, l.split()))[1:] for l in lines[1:]]
 
     def load_orders(self) -> List[List[int]]:

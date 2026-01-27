@@ -16,7 +16,8 @@ class Naif(Resolution):
         rack_capacity = instance.rack_capacity
         aisles_racks = instance.aisles_racks
         aeration_rate = float(instance.metadata.get("aeration_rate", 0.0))
-        num_products = int(instance.metadata.get("num_products", len(product_circuit)))
+        num_products = int(instance.metadata.get("num_products", \
+                                                 len(product_circuit)))
 
         # Group products by circuit, preserving original product order
         products_by_circuit = {}

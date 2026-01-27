@@ -21,7 +21,7 @@ class Resolution:
         Method to implement in subclasses to solve the problem.
     """
 
-    def __init__(self, instance_name: str):
+    def __init__(self, instance_name: str) -> None:
         """
         Initializes the Resolution class with the given instance name.
         
@@ -36,42 +36,67 @@ class Resolution:
         self.solve()
         self.solution.save_solution()
 
-    def solve(self):
+    def solve(self) -> None:
         """
         Solves the warehouse problem.
         This method should be implemented in subclasses.
         """
-        raise NotImplementedError("Method solve() must be implemented in subclass.")
+        raise NotImplementedError("Method solve() must be implemented in \
+subclass.")
 
-    def load_solution(self, instance: str, algo: str, id: str):
+    def load_solution(self, instance: str, algo: str, id: str) -> None:
+        """
+        Load a solution from a file named {instance}_{algo}_{id}.sol
+
+        Parameters
+        ----------
+        instance : str
+            Name of the instance
+        algo : str
+            Name of the algorithm
+        id : str
+            Identifier of the solution file
+        """
         self.solution.read_solution(instance, algo, id)
 
-    def write_svg(self, order_to_draw: int = 0, width: float = 1600.0, height: float = 800.0) -> bool:
+    def write_svg(self, order_to_draw: int = 0, 
+                  width: float = 1600.0, height: float = 800.0) -> bool:
         """
         Write an SVG representing the warehouse and order paths.
 
-        - Rack rectangles are placed using coordinates from ../help/rack_coordinates.txt.
-        If coordinates are normalized in [0,1], they are scaled to the canvas size.
-        If coordinates are absolute (possibly negative), they are affine-transformed
+        - Rack rectangles are placed using coordinates from \
+            ../help/rack_coordinates.txt.
+        If coordinates are normalized in [0,1], they are scaled to the canvas \
+            size.
+        If coordinates are absolute (possibly negative), they are \
+            affine-transformed
         to fit inside the canvas with margins.
         - Aisles are used for entry/exit points and traversal order (S-PATH):
         even aisles go up (entry at top, exit at bottom), odd aisles go down.
         - Rack ID is centered inside its rectangle.
-        - Racks 0 (bottom center) and n-1 (top center) are included as normal racks
+        - Racks 0 (bottom center) and n-1 (top center) are included as \
+            normal racks
         with their coordinates from the file.
         - For each order, draw path segments within aisles:
-        entry -> visited racks in this aisle (only racks storing its products) -> exit.
+        entry -> visited racks in this aisle (only racks storing its products)\
+              -> exit.
         Between consecutive aisles: an exit -> next entry segment.
-        If an aisle contains no racks to visit, draw a direct entry -> exit dashed line.
+        If an aisle contains no racks to visit, draw a direct entry \
+            -> exit dashed line.
 
-        :param order_to_draw: Index of the order to visualize (default: 0).
-        :type order_to_draw: int
-        :param width: Width of the SVG canvas (default: 1600.0).
-        :type width: float
-        :param height: Height of the SVG canvas (default: 800.0).
-        :type height: float
-        :return: True if SVG was successfully written, False otherwise.
-        :rtype: bool
+        Parameters
+        ----------
+        order_to_draw: int
+            Index of the order to visualize (0-based).
+        width: float
+            Width of the SVG canvas (default: 1600.0).
+        height: float
+            Height of the SVG canvas (default: 800.0).
+
+        Returns
+        -------
+        bool
+            True if SVG was successfully written, False otherwise.
         """
         try:
             import os
@@ -80,7 +105,8 @@ class Resolution:
             sol = self.solution
 
             # Instance basics
-            num_racks = int(inst.metadata.get("num_racks", len(inst.rack_capacity)))
+            num_racks = int(inst.metadata.get("num_racks", \
+                                              len(inst.rack_capacity)))
             aisles = inst.aisles_racks
             num_aisles = len(aisles)
 
@@ -95,7 +121,8 @@ class Resolution:
                 return palette[i % len(palette)]
             
 
-            # Map racks -> products and circuits (limit: 2 products for coloring)
+            # Map racks -> products and circuits 
+            # (limit: 2 products for coloring)
             rack_products = {}
             for p_idx, rack_id in enumerate(sol._positions):
                 try:
@@ -121,8 +148,10 @@ class Resolution:
             # Load rack coordinates from ../help/rack_coordinates.txt
             # Format:
             #   line 1: integer n (number of racks)
-            #   next n lines: "x y" floats (normalized [0,1] or absolute, possibly negative)
-            coords_path = os.path.join("../data/", self.name, "help", "rack_coordinates.txt")
+            #   next n lines: "x y" floats (normalized [0,1] or absolute, 
+            #                               possibly negative)
+            coords_path = os.path.join("../data/", self.name, "help", \
+                                       "rack_coordinates.txt")
             rack_centers = {}
             with open(coords_path, "r", encoding="utf-8") as f:
                 lines = [ln.strip() for ln in f.readlines() if ln.strip()]
@@ -134,7 +163,8 @@ class Resolution:
                 for i in range(num_use):
                     parts = lines[i + 1].replace(",", " ").split()
                     if len(parts) < 2:
-                        raise ValueError(f"Invalid coordinates line {i+2}: {lines[i+1]}")
+                        raise ValueError(f"Invalid coordinates line {i+2}:"+\
+                                         f" {lines[i+1]}")
                     x_val = float(parts[0])
                     y_val = float(parts[1])
                     raw_coords.append((x_val, y_val))
@@ -144,7 +174,8 @@ class Resolution:
                 max_y = max(c[1] for c in raw_coords)
                 min_x = min(c[0] for c in raw_coords)
                 min_y = min(c[1] for c in raw_coords)
-                normalized = (max_x <= 1.0 and max_y <= 1.0 and min_x >= 0.0 and min_y >= 0.0)
+                normalized = (max_x <= 1.0 and max_y <= 1.0 and \
+                              min_x >= 0.0 and min_y >= 0.0)
                 if normalized:
                     # Direct scaling to canvas size
                     for rid in range(num_use):
@@ -153,11 +184,14 @@ class Resolution:
                         cy = ry * height
                         rack_centers[rid] = (cx, cy)
                 else:
-                    # Affine transform to fit inside canvas with margins (handles negatives)
+                    # Affine transform to fit inside canvas with margins 
+                    # (handles negatives)
                     span_x = max_x - min_x
                     span_y = max_y - min_y
-                    scale_x = (width - 2.0 * margin) / span_x if span_x > 0 else 1.0
-                    scale_y = (height - 2.0 * margin) / span_y if span_y > 0 else 1.0
+                    scale_x = (width - 2.0 * margin) / span_x if span_x > 0 \
+                                else 1.0
+                    scale_y = (height - 2.0 * margin) / span_y if span_y > 0 \
+                                else 1.0
                     for rid in range(num_use):
                         rx, ry = raw_coords[rid]
                         cx = margin + (rx - min_x) * scale_x
@@ -175,19 +209,26 @@ class Resolution:
                     # As a last resort, center in canvas
                     aisle_center_x.append(width / 2.0)
                 else:
-                    mean_x = sum(rack_centers[r][0] for r in racks_j) / float(len(racks_j))
+                    mean_x = sum(rack_centers[r][0] for r in racks_j) / \
+                        float(len(racks_j))
                     aisle_center_x.append(mean_x)
 
             # Determine vertical bounds for aisles
-            top_y = margin + (min([c[1] for c in raw_coords[1:-1]]) - min_y) * scale_y - rack_h 
-            bottom_y = margin + (max([c[1] for c in raw_coords[1:-1]]) - min_y) * scale_y + rack_h 
+            top_y = margin + (min([c[1] \
+                    for c in raw_coords[1:-1]]) - min_y) * scale_y - rack_h 
+            bottom_y = margin + (max([c[1] \
+                    for c in raw_coords[1:-1]]) - min_y) * scale_y + rack_h 
             # Output file
-            path = f"../graphs/{self.name}_{self.solution._algorithm}_{order_to_draw}_{self.solution._id}.svg"
+            path = f"../graphs/{self.name}_{self.solution._algorithm}_"+\
+                    f"{order_to_draw}_{self.solution._id}.svg"
             with open(path, "w", encoding="utf-8") as svg:
                 # SVG header
                 svg.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-                svg.write(f"<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"{1.1}\" width=\"{width}\" height=\"{height}\">\n")
-                svg.write("<rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n")
+                svg.write(f"<svg xmlns=\"http://www.w3.org/2000/svg\" "+\
+                          f"version=\"1.1\" width=\"{width}\" "+\
+                          f"height=\"{height}\">\n")
+                svg.write("<rect width=\"100%\" height=\"100%\" "+\
+                          f"fill=\"white\"/>\n")
 
                 # Draw aisle entry/exit points
                 for j in range(num_aisles):
@@ -195,8 +236,10 @@ class Resolution:
                     direction_up = (j % 2 == 0)  # even -> up, odd -> down
                     entry_y = top_y if direction_up else bottom_y
                     exit_y = bottom_y if direction_up else top_y
-                    svg.write(f"<circle cx=\"{cx}\" cy=\"{entry_y}\" r=\"6\" fill=\"#333\"/>\n")
-                    svg.write(f"<circle cx=\"{cx}\" cy=\"{exit_y}\" r=\"6\" fill=\"#333\"/>\n")
+                    svg.write(f"<circle cx=\"{cx}\" cy=\"{entry_y}\" "+\
+                              f"r=\"6\" fill=\"#333\"/>\n")
+                    svg.write(f"<circle cx=\"{cx}\" cy=\"{exit_y}\" "+\
+                              f"r=\"6\" fill=\"#333\"/>\n")
 
                 # Draw racks (use coordinates from file or transformed)
                 for rid, (cx, cy) in rack_centers.items():
@@ -204,16 +247,30 @@ class Resolution:
                     y = cy - rack_h / 2.0
                     circuits = rack_circuits.get(rid, [])
                     if len(circuits) == 0:
-                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"white\" stroke=\"black\" stroke-width=\"1\"/>\n")
+                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" "+\
+                                  f"width=\"{rack_w}\" height=\"{rack_h}\" "+\
+                                  f"fill=\"white\" stroke=\"black\" "+\
+                                  f"stroke-width=\"1\"/>\n")
                     elif len(circuits) == 1:
                         fill = color_for_index(int(circuits[0]))
-                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w}\" height=\"{rack_h}\" fill=\"{fill}\" stroke=\"black\" stroke-width=\"1\"/>\n")
+                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" "+\
+                                  f"width=\"{rack_w}\" height=\"{rack_h}\" "+\
+                                  f"fill=\"{fill}\" stroke=\"black\" "+\
+                                  f"stroke-width=\"1\"/>\n")
                     else:
                         c1 = color_for_index(int(circuits[0]))
                         c2 = color_for_index(int(circuits[1]))
-                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c1}\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                        svg.write(f"<rect x=\"{x + rack_w/2.0}\" y=\"{y}\" width=\"{rack_w/2.0}\" height=\"{rack_h}\" fill=\"{c2}\" stroke=\"black\" stroke-width=\"1\"/>\n")
-                    svg.write(f"<text x=\"{cx}\" y=\"{cy + 4}\" font-size=\"12\" text-anchor=\"middle\" fill=\"black\">{rid}</text>\n")
+                        svg.write(f"<rect x=\"{x}\" y=\"{y}\" "+\
+                                f"width=\"{rack_w/2.0}\" height=\"{rack_h}\" "+\
+                                f"fill=\"{c1}\" stroke=\"black\" "+\
+                                f"stroke-width=\"1\"/>\n")
+                        svg.write(f"<rect x=\"{x + rack_w/2.0}\" y=\"{y}\" "+\
+                                f"width=\"{rack_w/2.0}\" height=\"{rack_h}\" "+\
+                                f"fill=\"{c2}\" stroke=\"black\" "+\
+                                f"stroke-width=\"1\"/>\n")
+                    svg.write(f"<text x=\"{cx}\" y=\"{cy + 4}\" "+\
+                              f"font-size=\"12\" text-anchor=\"middle\" "+\
+                              f"fill=\"black\">{rid}</text>\n")
 
                 # Draw path for a specific order (serpentine across aisles)
                 k = order_to_draw
@@ -232,11 +289,16 @@ class Resolution:
                     # Link previous aisle exit to current entry
                     if prev_exit is not None:
                         svg.write(
-                            f"<line x1=\"{prev_exit[0]}\" y1=\"{prev_exit[1]}\" x2=\"{entry_pt[0]}\" y2=\"{entry_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"0.6\"/>\n"
+                        f"<line x1=\"{prev_exit[0]}\" y1=\"{prev_exit[1]}\" "+\
+                        f"x2=\"{entry_pt[0]}\" y2=\"{entry_pt[1]}\" "+\
+                        f"stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" "+\
+                         "opacity=\"0.6\"/>\n"
                         )
 
-                    # Collect visit points (racks in this aisle holding products of the order)
-                    aisle_racks_set = set([r for r in aisles[j] if r in rack_centers and r not in (0, num_racks - 1)])
+                    # Collect visit points (racks in this aisle holding 
+                    #                       products of the order)
+                    aisle_racks_set = set([r for r in aisles[j] \
+                        if r in rack_centers and r not in (0, num_racks - 1)])
                     visit_points = []
                     for prod in order:
                         try:
@@ -261,16 +323,28 @@ class Resolution:
                         last = entry_pt
                         for pt in visit_points:
                             svg.write(
-                                f"<line x1=\"{last[0]}\" y1=\"{last[1]}\" x2=\"{pt[0]}\" y2=\"{pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"0.8\"/>\n"
+                                f"<line x1=\"{last[0]}\" y1=\"{last[1]}\" "+\
+                                f"x2=\"{pt[0]}\" y2=\"{pt[1]}\" "+\
+                                f"stroke=\"{stroke}\" "+\
+                                f"stroke-width=\"{stroke_w}\" "+\
+                                f"opacity=\"0.8\"/>\n"
                             )
                             last = pt
                         svg.write(
-                            f"<line x1=\"{last[0]}\" y1=\"{last[1]}\" x2=\"{exit_pt[0]}\" y2=\"{exit_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"{0.8}\"/>\n"
+                            f"<line x1=\"{last[0]}\" y1=\"{last[1]}\" "+\
+                            f"x2=\"{exit_pt[0]}\" y2=\"{exit_pt[1]}\" "+\
+                            f"stroke=\"{stroke}\" "+\
+                            f"stroke-width=\"{stroke_w}\" "+\
+                            f"opacity=\"{0.8}\"/>\n"
                         )
                     else:
                         # Aisle traversed without visiting racks
                         svg.write(
-                            f"<line x1=\"{entry_pt[0]}\" y1=\"{entry_pt[1]}\" x2=\"{exit_pt[0]}\" y2=\"{exit_pt[1]}\" stroke=\"{stroke}\" stroke-width=\"{stroke_w}\" opacity=\"{0.35}\" stroke-dasharray=\"4 3\"/>\n"
+                        f"<line x1=\"{entry_pt[0]}\" y1=\"{entry_pt[1]}\" "+\
+                        f"x2=\"{exit_pt[0]}\" y2=\"{exit_pt[1]}\" "+\
+                        f"stroke=\"{stroke}\" "+\
+                        f"stroke-width=\"{stroke_w}\" "+\
+                        f"opacity=\"{0.35}\" stroke-dasharray=\"4 3\"/>\n"
                         )
 
                     prev_exit = exit_pt
