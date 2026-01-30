@@ -7,3 +7,6 @@ __pycache__/
 data/
 build/
 .DS_Store
+
+# Fichiers à ingorer
+makefile
