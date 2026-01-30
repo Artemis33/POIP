@@ -1,5 +1,6 @@
 from WarehouseLoader import WarehouseLoader, WarehouseInstance
 from WarehouseSolution import WarehouseSolution
+import numpy as np
 
 
 class Resolution:
@@ -41,8 +42,8 @@ class Resolution:
         Solves the warehouse problem.
         This method should be implemented in subclasses.
         """
-        raise NotImplementedError("Method solve() must be implemented in \
-subclass.")
+        raise NotImplementedError("Method solve() must be implemented in" +\
+                                    " subclass.")
 
     def load_solution(self, instance: str, algo: str, id: str) -> None:
         """
@@ -105,10 +106,10 @@ subclass.")
             sol = self.solution
 
             # Instance basics
-            num_racks = int(inst.metadata.get("num_racks", \
+            nb_racks = int(inst.metadata.get("nb_racks", \
                                               len(inst.rack_capacity)))
             aisles = inst.aisles_racks
-            num_aisles = len(aisles)
+            nb_aisles = len(aisles)
 
             # Color palette
             palette = [
@@ -116,33 +117,28 @@ subclass.")
                 "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
             ]
             def color_for_index(i: int) -> str:
-                if i < len(palette):
-                    return palette[i]
+                if i < len(palette): return palette[i]
                 return palette[i % len(palette)]
             
 
             # Map racks -> products and circuits 
-            # (limit: 2 products for coloring)
             rack_products = {}
             for p_idx, rack_id in enumerate(sol._positions):
-                try:
-                    rid = int(rack_id)
-                except Exception:
-                    continue
-                if 0 <= rid < num_racks:
+                try: rid = int(rack_id)
+                except Exception: continue
+                if 0 <= rid < nb_racks:
                     rack_products.setdefault(rid, []).append(p_idx)
 
             rack_circuits = {}
             for rid, plist in rack_products.items():
-                circuits = []
-                for p in plist[:2]:
-                    circuits.append(inst.product_circuit[p])
+                circuits = set()
+                for p in plist:
+                    circuits.add(inst.product_circuit[p])
                 rack_circuits[rid] = circuits
 
             # Geometry and margins
             margin = 40.0
-            rack_w = 46.0
-            rack_h = 24.0
+            rack_w, rack_h = 46.0, 24.0
             top_y = margin + rack_h / 2.0
             bottom_y = height - margin - rack_h / 2.0
             # Load rack coordinates from ../help/rack_coordinates.txt
@@ -152,37 +148,31 @@ subclass.")
             #                               possibly negative)
             coords_path = os.path.join("../data/", self.name, "help", \
                                        "rack_coordinates.txt")
-            rack_centers = {}
             with open(coords_path, "r", encoding="utf-8") as f:
                 lines = [ln.strip() for ln in f.readlines() if ln.strip()]
-                n_coords = int(lines[0])
-                num_use = min(n_coords, num_racks)
+                nb_coords = int(lines[0])
+                nb_use = min(nb_coords, nb_racks)
 
                 # Parse raw coordinates
-                raw_coords = []
-                for i in range(num_use):
-                    parts = lines[i + 1].replace(",", " ").split()
+                raw_coords = np.zeros((nb_use, 2), dtype=float)
+                for i in range(nb_use):
+                    parts = lines[i + 1].split()
                     if len(parts) < 2:
                         raise ValueError(f"Invalid coordinates line {i+2}:"+\
                                          f" {lines[i+1]}")
                     x_val = float(parts[0])
                     y_val = float(parts[1])
-                    raw_coords.append((x_val, y_val))
+                    raw_coords[i, 0] = x_val
+                    raw_coords[i, 1] = y_val
 
                 # Detect normalization (assume [0,1] if all in range)
-                max_x = max(c[0] for c in raw_coords)
-                max_y = max(c[1] for c in raw_coords)
-                min_x = min(c[0] for c in raw_coords)
-                min_y = min(c[1] for c in raw_coords)
+                max_x, max_y = raw_coords.max(axis=0)
+                min_x, min_y = raw_coords.min(axis=0)
                 normalized = (max_x <= 1.0 and max_y <= 1.0 and \
                               min_x >= 0.0 and min_y >= 0.0)
                 if normalized:
                     # Direct scaling to canvas size
-                    for rid in range(num_use):
-                        rx, ry = raw_coords[rid]
-                        cx = rx * width
-                        cy = ry * height
-                        rack_centers[rid] = (cx, cy)
+                    rack_centers = raw_coords * np.array([[width, height]])
                 else:
                     # Affine transform to fit inside canvas with margins 
                     # (handles negatives)
@@ -192,26 +182,12 @@ subclass.")
                                 else 1.0
                     scale_y = (height - 2.0 * margin) / span_y if span_y > 0 \
                                 else 1.0
-                    for rid in range(num_use):
-                        rx, ry = raw_coords[rid]
-                        cx = margin + (rx - min_x) * scale_x
-                        cy = margin + (ry - min_y) * scale_y
-                        rack_centers[rid] = (cx, cy)
-
-                # If coords file has more than metadata racks, ignore extras
-                # If coords file has fewer, missing racks won't be drawn
-
+                    rack_centers = margin + \
+                        (raw_coords - np.array([[min_x, min_y]])) \
+                            * np.array([[scale_x, scale_y]])
+                    
             # Compute aisle centers (x only) from rack coordinates
-            aisle_center_x = []
-            for j in range(num_aisles):
-                racks_j = [r for r in aisles[j] if r in rack_centers]
-                if len(racks_j) == 0:
-                    # As a last resort, center in canvas
-                    aisle_center_x.append(width / 2.0)
-                else:
-                    mean_x = sum(rack_centers[r][0] for r in racks_j) / \
-                        float(len(racks_j))
-                    aisle_center_x.append(mean_x)
+            aisle_center_x = rack_centers[aisles, 0].mean(axis = 1)
 
             # Determine vertical bounds for aisles
             top_y = margin + (min([c[1] \
@@ -221,6 +197,7 @@ subclass.")
             # Output file
             path = f"../graphs/{self.name}_{self.solution._algorithm}_"+\
                     f"{order_to_draw}_{self.solution._id}.svg"
+            
             with open(path, "w", encoding="utf-8") as svg:
                 # SVG header
                 svg.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
@@ -231,9 +208,9 @@ subclass.")
                           f"fill=\"white\"/>\n")
 
                 # Draw aisle entry/exit points
-                for j in range(num_aisles):
+                for j in range(nb_aisles):
                     cx = aisle_center_x[j]
-                    direction_up = (j % 2 == 0)  # even -> up, odd -> down
+                    direction_up = (j+1) % 2  # even -> up, odd -> down
                     entry_y = top_y if direction_up else bottom_y
                     exit_y = bottom_y if direction_up else top_y
                     svg.write(f"<circle cx=\"{cx}\" cy=\"{entry_y}\" "+\
@@ -242,16 +219,16 @@ subclass.")
                               f"r=\"6\" fill=\"#333\"/>\n")
 
                 # Draw racks (use coordinates from file or transformed)
-                for rid, (cx, cy) in rack_centers.items():
+                for rid, (cx, cy) in enumerate(rack_centers):
                     x = cx - rack_w / 2.0
                     y = cy - rack_h / 2.0
-                    circuits = rack_circuits.get(rid, [])
+                    circuits = list(rack_circuits.get(rid, []))
                     if len(circuits) == 0:
                         svg.write(f"<rect x=\"{x}\" y=\"{y}\" "+\
                                   f"width=\"{rack_w}\" height=\"{rack_h}\" "+\
                                   f"fill=\"white\" stroke=\"black\" "+\
                                   f"stroke-width=\"1\"/>\n")
-                    elif len(circuits) == 1:
+                    elif len(circuits) == 1: 
                         fill = color_for_index(int(circuits[0]))
                         svg.write(f"<rect x=\"{x}\" y=\"{y}\" "+\
                                   f"width=\"{rack_w}\" height=\"{rack_h}\" "+\
@@ -274,13 +251,14 @@ subclass.")
 
                 # Draw path for a specific order (serpentine across aisles)
                 k = order_to_draw
-                order = inst.orders[k]  # Only first order for clarity
+                order = inst.orders[k]
                 stroke = color_for_index(k)
                 stroke_w = 2.0
-                prev_exit = None
-                for j in range(num_aisles):
+                prev_exit = rack_centers[0,:] # start at rack 0
+                
+                for j in range(nb_aisles):
                     cx = aisle_center_x[j]
-                    direction_up = (j % 2 == 0)
+                    direction_up = (j+1) % 2
                     entry_y = top_y if direction_up else bottom_y
                     exit_y = bottom_y if direction_up else top_y
                     entry_pt = (cx, entry_y)
@@ -298,7 +276,7 @@ subclass.")
                     # Collect visit points (racks in this aisle holding 
                     #                       products of the order)
                     aisle_racks_set = set([r for r in aisles[j] \
-                        if r in rack_centers and r not in (0, num_racks - 1)])
+                        if r in rack_centers and r not in (0, nb_racks - 1)])
                     visit_points = []
                     for prod in order:
                         try:

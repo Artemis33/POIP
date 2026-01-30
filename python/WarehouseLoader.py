@@ -274,7 +274,7 @@ class WarehouseLoader:
             Structured data object containing all loaded components.
         """
         return WarehouseInstance(
-            adjacency=self.load_adjacency_matrix(),
+            adjacency = self.load_adjacency_matrix(),
             rack_capacity=self.load_rack_capacity(),
             product_circuit=self.load_product_circuits(),
             aisles_racks=self.load_aisles_racks(),
